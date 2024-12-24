@@ -18,17 +18,12 @@ def semantic_search(query, embedding_model, qdrant_client, collection_name, k):
     Returns:
         list[dict]: List of top-k matching documents with metadata.
     """
-    # Generate embedding for the query
     query_embedding = np.array(embedding_model.embedding_model.embed_documents([query])[0])
-
-    # Perform search in Qdrant
     search_results = qdrant_client.search(
         collection_name=collection_name,
         query_vector=query_embedding.tolist(),
         limit=k,
     )
-
-    # Format search results
     semantic_context = [
         {"id": result.id, "text": result.payload.get("text"), "source": result.payload.get("source")}
         for result in search_results
@@ -50,8 +45,8 @@ def lexical_search(index, query, chunks, k):
         list[dict]: List of top-k matching document chunks with scores.
     """
     query_tokens = query.lower().split()  # Preprocess query
-    scores = index.get_scores(query_tokens)  # Get matching scores
-    indices = sorted(range(len(scores)), key=lambda i: -scores[i])[:k]  # Sort and get top k
+    scores = index.get_scores(query_tokens)
+    indices = sorted(range(len(scores)), key=lambda i: -scores[i])[:k]
     lexical_context = [
         {"id": chunks[i][0], "text": chunks[i][1], "source": chunks[i][2], "score": scores[i]} for i in indices
     ]

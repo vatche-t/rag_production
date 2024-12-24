@@ -3,43 +3,42 @@ from ingestion.embedder import EmbedChunks
 from ingestion.vector_store import VectorStore
 from query.query_agent import QueryAgent
 from pathlib import Path
-from utils.logger import logger
+from loguru import logger
+from langchain_ollama import OllamaLLM
 
 COLLECTION_NAME = "rag_collection"
 
 
 def generate_response(user_query):
-    """
-    Generate a response to the user's query using the QueryAgent.
-
-    Args:
-        user_query (str): The query provided by the user.
-    """
     try:
-        # Load index or build it if not already present
         logger.info("Loading index from Qdrant...")
         chunks = load_index(
             embedding_model_name="nomic-embed-text",
             chunk_size=500,
             chunk_overlap=50,
-            docs_dir=Path("data/pdfs"),  # Path to PDF documents
+            docs_dir=Path("data/pdfs"),
             collection_name=COLLECTION_NAME,
         )
         logger.info(f"Loaded {len(chunks)} chunks from Qdrant.")
 
-        # Initialize embedder, vector store, and query agent
-        logger.info("Initializing embedder and vector store...")
+        # Initialize components
         embedder = EmbedChunks(model_name="nomic-embed-text")
         vector_store = VectorStore(collection_name=COLLECTION_NAME)
-        query_agent = QueryAgent(embedder=embedder, vector_store=vector_store)
+        llm = OllamaLLM(model="llama3.2", base_url="http://localhost:11434")
+        query_agent = QueryAgent(
+            embedding_model=embedder,
+            vector_store=vector_store,
+            llm=llm,
+        )
 
         # Generate response
         logger.info("Generating response for the query...")
-        response = query_agent.answer_query(user_query)
+        response = query_agent(query=user_query, num_chunks=5, lexical_search_k=1, rerank_k=7, stream=False)
 
         # Display results
         print(f"User Query: {user_query}")
-        print(f"Response: {response}")
+        print(f"Answer: {response['answer']}")
+        print(f"Sources: {response['sources']}")
     except Exception as e:
         logger.error(f"Error generating response: {e}")
 

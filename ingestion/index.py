@@ -9,7 +9,7 @@ from ray.data import ActorPoolStrategy
 from ingestion.pdf_processor import process_pdf
 from ingestion.embedder import EmbedChunks
 from ingestion.vector_store import VectorStore
-from utils.logger import logger
+from loguru import logger
 
 
 class StoreResults:
@@ -69,12 +69,10 @@ def build_index(docs_dir, chunk_size, chunk_overlap, embedding_model_name, colle
     """
     logger.info("Starting the index-building process...")
 
-    # Process PDFs to extract text
     ds = ray.data.from_items([{"path": path} for path in docs_dir.rglob("*.pdf") if not path.is_dir()])
-    sections_ds = ds.flat_map(process_pdf)  # Extract text and source info from PDFs
+    sections_ds = ds.flat_map(process_pdf)
     chunks_ds = sections_ds.flat_map(partial(chunk_section, chunk_size=chunk_size, chunk_overlap=chunk_overlap))
 
-    # Embed chunks
     embedded_chunks = chunks_ds.map_batches(
         EmbedChunks,
         fn_constructor_kwargs={"model_name": embedding_model_name},
@@ -83,7 +81,6 @@ def build_index(docs_dir, chunk_size, chunk_overlap, embedding_model_name, colle
         compute=ActorPoolStrategy(size=1),
     )
 
-    # Store embeddings in Qdrant
     embedded_chunks.map_batches(
         StoreResults(collection_name=collection_name),
         batch_size=128,
@@ -94,13 +91,7 @@ def build_index(docs_dir, chunk_size, chunk_overlap, embedding_model_name, colle
     logger.info("Index built and stored in Qdrant successfully!")
 
 
-def load_index(
-    embedding_model_name,
-    chunk_size,
-    chunk_overlap,
-    docs_dir=None,
-    collection_name=None,
-):
+def load_index(embedding_model_name, chunk_size, chunk_overlap, docs_dir=None, collection_name=None):
     """
     Load or build the index. This ensures the Qdrant collection is up-to-date.
 
@@ -117,8 +108,11 @@ def load_index(
     logger.info("Loading index from Qdrant...")
 
     vector_store = VectorStore(collection_name=collection_name)
-    if not vector_store.collection_exists():
-        logger.info("Qdrant collection does not exist. Building a new index...")
+    vector_store._ensure_collection_exists()
+
+    # If no documents exist, build the index
+    if not vector_store.collection_exists() or not vector_store.get_all_documents():
+        logger.info("Qdrant collection is empty. Building a new index...")
         if not docs_dir:
             raise ValueError("No documents directory provided for building the index.")
         build_index(
@@ -131,15 +125,3 @@ def load_index(
 
     # Fetch all chunks from the vector store
     return vector_store.get_all_documents()
-
-
-if __name__ == "__main__":
-    # Build index for PDF documents
-    build_index(
-        docs_dir=Path("data/pdfs"),
-        chunk_size=500,
-        chunk_overlap=50,
-        embedding_model_name="nomic-embed-text",
-        collection_name="rag_collection",
-    )
-    print("Index built successfully!")

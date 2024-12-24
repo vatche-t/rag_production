@@ -1,17 +1,21 @@
 import json
-import re
 from pathlib import Path
-
 from tqdm import tqdm
 from ingestion.embedder import EmbedChunks
 from ingestion.vector_store import VectorStore
 from query.reranker import rerank_documents
 from query.search import semantic_search, lexical_search
-from utils.logger import logger
-from configs.ollama_config import OllamaLLM
+from loguru import logger
+
+# from configs.ollama_config import OllamaLLMWrapper
+from langchain_ollama import OllamaLLM
 
 
 class QueryAgent:
+    """
+    A class to handle user queries by retrieving, reranking, and generating responses.
+    """
+
     def __init__(
         self,
         embedding_model: EmbedChunks,
@@ -24,55 +28,28 @@ class QueryAgent:
         system_content="",
         assistant_content="",
     ):
-        """
-        Initialize the QueryAgent.
-
-        Args:
-            embedding_model (EmbedChunks): Model for generating embeddings.
-            vector_store (VectorStore): Vector store client for retrieval.
-            llm (OllamaLLM): LLM client for response generation.
-            lexical_index: Lexical search index (optional).
-            reranker: Reranking model (optional).
-            temperature (float): Sampling temperature for the LLM.
-            max_context_length (int): Maximum token length for input/output.
-            system_content (str): System prompt for the LLM.
-            assistant_content (str): Assistant's initial content for the conversation.
-        """
         self.embedding_model = embedding_model
         self.vector_store = vector_store
         self.llm = llm
         self.lexical_index = lexical_index
         self.reranker = reranker
         self.temperature = temperature
-        self.context_length = int(0.5 * max_context_length)  # Reserve 50% for the context
-        self.max_tokens = int(0.5 * max_context_length)  # Maximum output tokens
+        self.context_length = int(0.5 * max_context_length)  # Reserve 50% for context
+        self.max_tokens = int(0.5 * max_context_length)  # Reserve 50% for response
         self.system_content = system_content
         self.assistant_content = assistant_content
 
     def __call__(
         self,
-        query,
-        num_chunks=5,
-        lexical_search_k=1,
-        rerank_k=7,
-        stream=True,
-    ):
-        """
-        Process a user query to generate a response.
-
-        Args:
-            query (str): User query.
-            num_chunks (int): Number of top semantic results to retrieve.
-            lexical_search_k (int): Number of top lexical results to include.
-            rerank_k (int): Number of reranked results to use.
-            stream (bool): Whether to stream the response from the LLM.
-
-        Returns:
-            dict: Query result with answer, sources, and document IDs.
-        """
+        query: str,
+        num_chunks: int = 5,
+        lexical_search_k: int = 1,
+        rerank_k: int = 7,
+        stream: bool = False,
+    ) -> dict:
         logger.info(f"Processing query: {query}")
 
-        # Perform semantic search
+        # Semantic search
         context_results = semantic_search(
             query=query,
             embedding_model=self.embedding_model,
@@ -86,12 +63,12 @@ class QueryAgent:
             lexical_context = lexical_search(
                 index=self.lexical_index,
                 query=query,
-                chunks=self.vector_store.get_chunks(),
+                chunks=self.vector_store.get_all_documents(),
                 k=lexical_search_k,
             )
             context_results[lexical_search_k:lexical_search_k] = lexical_context
 
-        # Rerank results
+        # Rerank documents
         if self.reranker:
             context_results = rerank_documents(
                 documents=context_results,
@@ -99,53 +76,51 @@ class QueryAgent:
             )
             context_results = context_results[:rerank_k]
 
-        # Prepare context for the LLM
+        # Prepare context and generate response
         document_ids = [item["id"] for item in context_results]
-        context = [item["text"] for item in context_results]
+        context = "\n\n".join([item["text"] for item in context_results])
         sources = set([item["source"] for item in context_results])
-        user_content = f"query: {query}, context: {context}"
+        prompts = [f"Context:\n{context}\n\nUser Query:\n{query}"]
 
-        # Generate LLM response
-        answer = self.llm.generate(
-            prompt=user_content,
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
-            stream=stream,
+        # Generate response
+        response = self.llm.generate(
+            prompts=prompts,
+            stop=None,
         )
 
-        # Prepare result
-        result = {
+        # Extract the text portion of the response
+        answer = response.generations[0][0].text.strip()
+        return {
             "question": query,
             "sources": list(sources),
             "document_ids": document_ids,
             "answer": answer,
         }
-        return result
 
 
-# Generate responses for a set of queries
+# Generate responses for a batch of queries
 def generate_responses(
-    queries,
-    embedding_model,
-    vector_store,
-    llm,
-    output_path,
-    num_chunks=5,
-    lexical_search_k=1,
-    rerank_k=7,
+    queries: list,
+    embedding_model: EmbedChunks,
+    vector_store: VectorStore,
+    llm: OllamaLLM,
+    output_path: str,
+    num_chunks: int = 5,
+    lexical_search_k: int = 1,
+    rerank_k: int = 7,
 ):
     """
-    Generate responses for a list of queries and save them to a file.
+    Generate responses for a batch of queries and save results.
 
     Args:
-        queries (list[str]): List of user queries.
-        embedding_model (EmbedChunks): Embedding model.
-        vector_store (VectorStore): Vector store for retrieval.
-        llm (OllamaLLM): LLM for response generation.
-        output_path (str): Path to save the generated responses.
+        queries (list): List of user queries.
+        embedding_model (EmbedChunks): Embedding model instance.
+        vector_store (VectorStore): Vector store instance.
+        llm (OllamaLLMWrapper): LLM instance.
+        output_path (str): Path to save the output results.
         num_chunks (int): Number of semantic search results.
         lexical_search_k (int): Number of lexical search results.
-        rerank_k (int): Number of reranked results to use.
+        rerank_k (int): Number of reranked results.
     """
     agent = QueryAgent(
         embedding_model=embedding_model,
@@ -154,7 +129,7 @@ def generate_responses(
     )
 
     results = []
-    for query in tqdm(queries):
+    for query in tqdm(queries, desc="Processing queries"):
         result = agent(
             query=query,
             num_chunks=num_chunks,
@@ -164,8 +139,8 @@ def generate_responses(
         )
         results.append(result)
 
-    # Save results to file
+    # Save results to a JSON file
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as fp:
-        json.dump(results, fp, indent=4)
-    logger.info(f"Responses saved to {output_path}")
+    with open(output_path, "w") as file:
+        json.dump(results, file, indent=4)
+    logger.info(f"Saved query responses to {output_path}")

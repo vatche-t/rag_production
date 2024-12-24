@@ -3,22 +3,22 @@ from loguru import logger
 from tqdm.asyncio import tqdm as tqdm_asyncio
 
 
-class OllamaLLM:
+class OllamaLLMWrapper:
     """
     A class to handle text generation using the Ollama LLM.
     """
 
     def __init__(self, model="llama3.2", base_url="http://localhost:11434"):
         """
-        Initializes the OllamaLLM class.
+        Initializes the OllamaLLMWrapper class.
 
         Args:
-            model (str): Name of the model (default: "llama3.2").
-            base_url (str): Base URL of the Ollama API (default: "http://localhost:11434").
+            model (str): Name of the model.
+            base_url (str): Base URL of the Ollama API.
         """
         self.model = model
         self.base_url = base_url
-        self.generator = OllamaLLM(model=model, base_url=base_url)
+        self.client = OllamaLLM(model=self.model, base_url=self.base_url)
 
     def generate(self, prompt, max_tokens=256, temperature=0.7, stream=False):
         """
@@ -35,14 +35,15 @@ class OllamaLLM:
         """
         try:
             if stream:
-                return self.generator.stream(prompt, max_tokens=max_tokens, temperature=temperature)
+                # Stream response chunks
+                for chunk in self.client.stream(prompt, max_tokens=max_tokens, temperature=temperature):
+                    yield chunk
             else:
-                response = self.generator(prompt, max_tokens=max_tokens, temperature=temperature)
-                return response["choices"][0]["text"]
-
+                # Return full response
+                response = self.client(prompt, max_tokens=max_tokens, temperature=temperature)
+                return response  # ["choices"][0]["text"]
         except Exception as e:
-            logger.error(f"Error generating text with Ollama: {e}")
-            raise RuntimeError(f"Error generating text: {e}")
+            raise RuntimeError(f"Error generating response: {e}")
 
 
 class OllamaEmbeddingsWrapper:

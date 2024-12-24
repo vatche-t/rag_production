@@ -1,6 +1,6 @@
 import uuid
 from configs.qdrant_config import get_qdrant_client
-from qdrant_client.http.models import VectorParams, Distance
+from qdrant_client.http.models import VectorParams, Distance, ScoredPoint
 
 
 class VectorStore:
@@ -25,6 +25,16 @@ class VectorStore:
         # Ensure the collection exists or create it
         self._ensure_collection_exists()
 
+    def collection_exists(self):
+        """
+        Check if the Qdrant collection exists.
+
+        Returns:
+            bool: True if the collection exists, False otherwise.
+        """
+        collections = self.client.get_collections().collections
+        return any(c.name == self.collection_name for c in collections)
+
     def _ensure_collection_exists(self):
         """
         Ensure the Qdrant collection exists; create it if it doesn't.
@@ -48,6 +58,9 @@ class VectorStore:
 
         Args:
             batch (list[dict]): A list of dictionaries with "text", "source", and "embedding" keys.
+
+        Raises:
+            RuntimeError: If there is an issue adding documents to the collection.
         """
         points = [
             {
@@ -66,6 +79,50 @@ class VectorStore:
         except Exception as e:
             raise RuntimeError(f"Error adding documents to Qdrant: {e}")
 
+    def get_all_documents(self):
+        """
+        Retrieve all documents stored in the Qdrant collection.
+
+        Returns:
+            list[dict]: List of documents with text and metadata.
+
+        Raises:
+            RuntimeError: If there is an issue retrieving documents.
+        """
+        try:
+            documents = []
+            offset = None  # Used to track pagination
+
+            while True:
+                # Retrieve documents in batches
+                items, next_page = self.client.scroll(
+                    collection_name=self.collection_name,
+                    with_payload=True,
+                    offset=offset,
+                    limit=100,  # Adjust batch size if needed
+                )
+
+                # Process retrieved items
+                documents.extend(
+                    [
+                        {
+                            "id": item.id,
+                            "text": item.payload["text"],
+                            "source": item.payload.get("source", "Unknown"),
+                        }
+                        for item in items
+                    ]
+                )
+
+                # Check if there are more documents
+                if next_page is None:
+                    break
+                offset = next_page
+
+            return documents
+        except Exception as e:
+            raise RuntimeError(f"Error retrieving all documents from Qdrant: {e}")
+
     def search(self, query_vector, top_k=5):
         """
         Perform a semantic search in the Qdrant collection.
@@ -76,6 +133,9 @@ class VectorStore:
 
         Returns:
             list[dict]: List of search results with text and metadata.
+
+        Raises:
+            RuntimeError: If there is an issue during the search.
         """
         try:
             results = self.client.search(
