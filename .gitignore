@@ -81,3 +81,4 @@ ray_results/
 # Pip
 pip-wheel-metadata/
 *.lock
+data/

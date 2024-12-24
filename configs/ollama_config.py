@@ -1,18 +1,24 @@
-import requests
-import json
+from langchain_ollama import OllamaLLM, OllamaEmbeddings
+from loguru import logger
+from tqdm.asyncio import tqdm as tqdm_asyncio
 
 
 class OllamaLLM:
+    """
+    A class to handle text generation using the Ollama LLM.
+    """
+
     def __init__(self, model="llama3.2", base_url="http://localhost:11434"):
         """
         Initializes the OllamaLLM class.
 
         Args:
             model (str): Name of the model (default: "llama3.2").
-            base_url (str): Base URL of the Llama3.2 API (default: "http://localhost:11434").
+            base_url (str): Base URL of the Ollama API (default: "http://localhost:11434").
         """
         self.model = model
         self.base_url = base_url
+        self.generator = OllamaLLM(model=model, base_url=base_url)
 
     def generate(self, prompt, max_tokens=256, temperature=0.7, stream=False):
         """
@@ -27,72 +33,47 @@ class OllamaLLM:
         Returns:
             str: Generated response from the model.
         """
-        endpoint = f"{self.base_url}/v1/generate"
-        headers = {"Content-Type": "application/json"}
-        payload = {
-            "model": self.model,
-            "prompt": prompt,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "stream": stream,
-        }
-
         try:
-            response = requests.post(endpoint, json=payload, headers=headers, stream=stream)
-            response.raise_for_status()
-
             if stream:
-                return self._stream_response(response)
+                return self.generator.stream(prompt, max_tokens=max_tokens, temperature=temperature)
             else:
-                return response.json()["choices"][0]["text"]
+                response = self.generator(prompt, max_tokens=max_tokens, temperature=temperature)
+                return response["choices"][0]["text"]
 
-        except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"Error communicating with Llama3.2 API: {e}")
-
-    def _stream_response(self, response):
-        """
-        Handle streaming responses from the Llama3.2 API.
-
-        Args:
-            response (requests.Response): Response object from the API.
-
-        Yields:
-            str: Streamed content chunks.
-        """
-        for line in response.iter_lines(decode_unicode=True):
-            if line.strip():
-                data = json.loads(line)
-                if "choices" in data and "text" in data["choices"][0]:
-                    yield data["choices"][0]["text"]
+        except Exception as e:
+            logger.error(f"Error generating text with Ollama: {e}")
+            raise RuntimeError(f"Error generating text: {e}")
 
 
-class OllamaEmbeddings:
+class OllamaEmbeddingsWrapper:
+    """
+    A wrapper class for embedding generation using Ollama.
+    """
+
     def __init__(self, model, base_url="http://localhost:11434"):
-        self.model = model
-        self.base_url = base_url
-
-    def embed_documents(self, documents):
         """
-        Sends a request to the Ollama embedding API to generate embeddings for documents.
+        Initialize the embedding generator with the specified model.
 
         Args:
-            documents (list[str]): List of text documents to embed.
+            model (str): Name of the embedding model.
+            base_url (str): Base URL for the Ollama API.
+        """
+        self.model = model
+        self.embedding_model = OllamaEmbeddings(model=model, base_url=base_url)
+
+    def embed_documents(self, texts):
+        """
+        Generate embeddings for the given texts.
+
+        Args:
+            texts (list of str): The texts to embed.
 
         Returns:
-            list[list[float]]: List of embeddings for the input documents.
+            list: Embeddings corresponding to the input texts.
         """
-        # Replace with actual API call to your Ollama server
-        # Example:
-        embeddings = []
-        for doc in documents:
-            embedding = self._api_call_to_ollama(doc)
-            embeddings.append(embedding)
-        return embeddings
-
-    def _api_call_to_ollama(self, document):
-        """
-        Placeholder for the API call to Ollama server.
-        Replace this with your actual implementation.
-        """
-        # Make an HTTP request to the Ollama embedding endpoint here
-        raise NotImplementedError("API call logic to Ollama should be implemented.")
+        try:
+            logger.debug(f"Generating embeddings for {len(texts)} documents...")
+            return self.embedding_model.embed_documents(texts)
+        except Exception as e:
+            logger.error(f"Error generating embeddings: {e}")
+            raise

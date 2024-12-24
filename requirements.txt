@@ -9,6 +9,7 @@ PyPDF2
 transformers
 numpy
 pandas
+langchain_ollama
 
 # Vector Database (Qdrant)
 qdrant-client
@@ -16,6 +17,11 @@ qdrant-client
 # FastAPI and APIs
 fastapi
 typer
+pydantic
+starlette
+
+# Rank and Search
+rank-bm25
 
 # Visualization and Streamlit
 streamlit
@@ -28,8 +34,6 @@ tqdm
 # Deep Learning and Tokenization
 torch
 torchvision
-tqdm
-tiktoken
 ollama
 
 # Styling and Utilities
@@ -38,3 +42,9 @@ flake8
 isort
 pyupgrade
 pre-commit
+
+# CORS Middleware
+fastapi[middleware]
+
+# Logger
+loguru
