@@ -1,0 +1,40 @@
+# Core Libraries
+langchain
+sentence_transformers
+openai
+python-dotenv
+tiktoken
+ray
+PyPDF2
+transformers
+numpy
+pandas
+
+# Vector Database (Qdrant)
+qdrant-client
+
+# FastAPI and APIs
+fastapi
+typer
+
+# Visualization and Streamlit
+streamlit
+matplotlib
+seaborn
+
+# Text Splitting and Processing
+tqdm
+
+# Deep Learning and Tokenization
+torch
+torchvision
+tqdm
+tiktoken
+ollama
+
+# Styling and Utilities
+black
+flake8
+isort
+pyupgrade
+pre-commit

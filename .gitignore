@@ -1,0 +1,83 @@
+# Python-related
+*.py[cod]
+__pycache__/
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+/venv/
+
+# Editor and IDE Files
+/.vscode/
+/.idea/
+/*.swp
+
+# Logs and Debugging
+*.log
+*.out
+*.err
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Test and Coverage Reports
+htmlcov/
+.tox/
+.nox/
+.cache/
+coverage.*
+*.cover
+*.py,cover
+.hypothesis/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# Compiled files
+*.o
+*.pyc
+*.pyo
+*.pyd
+
+# Environment Variables
+.env
+.env.*
+
+# Project-specific files
+data/ # Data folder
+*.pdf # PDF files
+*.csv # CSV files
+
+# Ray-related
+ray_results/
+*.rdb
+
+# Other temporary files
+*.tmp
+*.bak
+*.backup
+*.old
+*.swp
+*.swo
+*.orig
+
+# Pytest Cache
+.pytest_cache/
+
+# Pre-commit Hooks
+.pre-commit-config.yaml
+.pre-commit-hooks.yaml
+.pre-commit/
+
+# Matplotlib Configuration
+.mplstyle
+
+# Pip
+pip-wheel-metadata/
+*.lock
