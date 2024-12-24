@@ -139,13 +139,3 @@ See the full list in `requirements.txt`. Key libraries include:
 - Add support for larger models with distributed GPU inference.
 
 ---
-
-## **Contributing**
-
-Contributions are welcome! Please fork the repository and create a pull request with your proposed changes.
-
----
-
-## **License**
-
-This project is licensed under the MIT License.
